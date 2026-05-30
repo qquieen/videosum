@@ -1,0 +1,65 @@
+{
+    "app_name": "VideoSum",
+    "app_subtitle": "Local Intelligent Video Summary & Courseware Generator",
+    "menu": {
+        "settings": "Settings",
+        "language": "Language",
+        "theme": "Theme",
+        "about": "About"
+    },
+    "input": {
+        "url_placeholder": "Enter video URL (Bilibili, YouTube, etc.)",
+        "start_button": "Start Summary",
+        "mode_label": "Backend Mode",
+        "mode_recommended": "Recommended",
+        "mode_local": "Local Only",
+        "mode_cloud": "Cloud Only",
+        "mode_hybrid": "Hybrid"
+    },
+    "status": {
+        "downloading": "Downloading...",
+        "transcribing": "Transcribing...",
+        "summarizing": "Summarizing...",
+        "completed": "Completed",
+        "failed": "Failed",
+        "progress": "Progress"
+    },
+    "tabs": {
+        "summary": "Summary",
+        "qa": "Q&A Assistant",
+        "courseware": "Courseware Preview"
+    },
+    "summary": {
+        "copy": "Copy",
+        "export": "Export",
+        "no_summary": "No summary yet. Please process a video first."
+    },
+    "qa": {
+        "placeholder": "Enter your question...",
+        "send": "Send",
+        "thinking": "Thinking..."
+    },
+    "settings": {
+        "asr_backend": "ASR Backend",
+        "llm_backend": "LLM Backend",
+        "api_key": "API Key",
+        "model": "Model",
+        "save": "Save",
+        "cancel": "Cancel",
+        "test_connection": "Test Connection"
+    },
+    "budget": {
+        "estimated_cost": "Estimated Cost",
+        "actual_cost": "Actual Cost",
+        "continue": "Continue",
+        "cancel": "Cancel",
+        "warning": "Cost exceeds threshold. Continue?"
+    },
+    "errors": {
+        "download_failed": "Download failed",
+        "transcribe_failed": "Transcription failed",
+        "summarize_failed": "Summarization failed",
+        "network_error": "Network error",
+        "config_error": "Configuration error"
+    }
+}

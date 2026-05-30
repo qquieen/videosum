@@ -1,0 +1,65 @@
+{
+    "app_name": "VideoSum",
+    "app_subtitle": "本地智能视频总结与课件生成工具",
+    "menu": {
+        "settings": "设置",
+        "language": "语言",
+        "theme": "主题",
+        "about": "关于"
+    },
+    "input": {
+        "url_placeholder": "输入视频URL（B站、YouTube等）",
+        "start_button": "开始总结",
+        "mode_label": "后端模式",
+        "mode_recommended": "推荐",
+        "mode_local": "纯本地",
+        "mode_cloud": "纯云端",
+        "mode_hybrid": "混合"
+    },
+    "status": {
+        "downloading": "下载中...",
+        "transcribing": "转写中...",
+        "summarizing": "总结中...",
+        "completed": "完成",
+        "failed": "失败",
+        "progress": "进度"
+    },
+    "tabs": {
+        "summary": "总结结果",
+        "qa": "问答助手",
+        "courseware": "课件预览"
+    },
+    "summary": {
+        "copy": "复制",
+        "export": "导出",
+        "no_summary": "暂无总结，请先处理视频"
+    },
+    "qa": {
+        "placeholder": "输入问题...",
+        "send": "发送",
+        "thinking": "思考中..."
+    },
+    "settings": {
+        "asr_backend": "ASR后端",
+        "llm_backend": "LLM后端",
+        "api_key": "API密钥",
+        "model": "模型",
+        "save": "保存",
+        "cancel": "取消",
+        "test_connection": "测试连接"
+    },
+    "budget": {
+        "estimated_cost": "预估费用",
+        "actual_cost": "实际费用",
+        "continue": "继续",
+        "cancel": "取消",
+        "warning": "费用超过阈值，是否继续？"
+    },
+    "errors": {
+        "download_failed": "下载失败",
+        "transcribe_failed": "转写失败",
+        "summarize_failed": "总结失败",
+        "network_error": "网络错误",
+        "config_error": "配置错误"
+    }
+}

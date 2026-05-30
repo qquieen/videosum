@@ -1,0 +1,65 @@
+{
+    "app_name": "VideoSum",
+    "app_subtitle": "Lokales intelligentes Video-Zusammenfassungs- und Kursmaterial-Tool",
+    "menu": {
+        "settings": "Einstellungen",
+        "language": "Sprache",
+        "theme": "Thema",
+        "about": "Über"
+    },
+    "input": {
+        "url_placeholder": "Video-URL eingeben (Bilibili, YouTube usw.)",
+        "start_button": "Zusammenfassung starten",
+        "mode_label": "Backend-Modus",
+        "mode_recommended": "Empfohlen",
+        "mode_local": "Nur lokal",
+        "mode_cloud": "Nur Cloud",
+        "mode_hybrid": "Hybrid"
+    },
+    "status": {
+        "downloading": "Herunterladen...",
+        "transcribing": "Transkribieren...",
+        "summarizing": "Zusammenfassen...",
+        "completed": "Abgeschlossen",
+        "failed": "Fehlgeschlagen",
+        "progress": "Fortschritt"
+    },
+    "tabs": {
+        "summary": "Zusammenfassung",
+        "qa": "Q&A-Assistent",
+        "courseware": "Kursmaterial-Vorschau"
+    },
+    "summary": {
+        "copy": "Kopieren",
+        "export": "Exportieren",
+        "no_summary": "Noch keine Zusammenfassung. Bitte verarbeiten Sie zuerst ein Video."
+    },
+    "qa": {
+        "placeholder": "Ihre Frage eingeben...",
+        "send": "Senden",
+        "thinking": "Denke nach..."
+    },
+    "settings": {
+        "asr_backend": "ASR-Backend",
+        "llm_backend": "LLM-Backend",
+        "api_key": "API-Schlüssel",
+        "model": "Modell",
+        "save": "Speichern",
+        "cancel": "Abbrechen",
+        "test_connection": "Verbindung testen"
+    },
+    "budget": {
+        "estimated_cost": "Geschätzte Kosten",
+        "actual_cost": "Tatsächliche Kosten",
+        "continue": "Fortfahren",
+        "cancel": "Abbrechen",
+        "warning": "Kosten überschreiten Schwellenwert. Forthfahren?"
+    },
+    "errors": {
+        "download_failed": "Download fehlgeschlagen",
+        "transcribe_failed": "Transkription fehlgeschlagen",
+        "summarize_failed": "Zusammenfassung fehlgeschlagen",
+        "network_error": "Netzwerkfehler",
+        "config_error": "Konfigurationsfehler"
+    }
+}

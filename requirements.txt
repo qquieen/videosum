@@ -1,0 +1,23 @@
+# 核心依赖
+yt-dlp>=2024.1.0
+pyyaml>=6.0
+openai>=1.0.0
+
+# ASR依赖
+faster-whisper>=0.10.0
+
+# UI依赖
+gradio>=4.0.0
+
+# 向量检索依赖
+langchain>=0.1.0
+langchain-community>=0.0.10
+chromadb>=0.4.0
+
+# 工具依赖
+requests>=2.31.0
+aiohttp>=3.9.0
+
+# 可选依赖（视觉插件）
+# opencv-python>=4.8.0
+# pillow>=10.0.0
