@@ -1,0 +1,75 @@
+app:
+  output_dir: "~/Videos/SummaryOutput"
+  temp_dir: "~/tmp/videosummary"
+  keep_temp_files: false
+  language: "zh"
+
+asr:
+  backend: "local"
+  local:
+    model_size: "large-v3"
+    device: "auto"
+    compute_type: "float16"
+  openai:
+    api_key: ""
+  aliyun:
+    access_key_id: ""
+    access_key_secret: ""
+    app_key: ""
+    region: "cn-shanghai"
+  google:
+    api_key: ""
+
+llm:
+  backend: "deepseek"
+  openai:
+    api_key: ""
+    model: "gpt-4.1-mini"
+  anthropic:
+    api_key: ""
+    model: "claude-sonnet-4-20250514"
+  google:
+    api_key: ""
+    model: "gemini-2.5-flash"
+  deepseek:
+    api_key: ""
+    model: "deepseek-chat"
+  qwen:
+    api_key: ""
+    model: "qwen-plus"
+  kimi:
+    api_key: ""
+    model: "moonshot-v1-128k"
+  glm:
+    api_key: ""
+    model: "glm-4-plus"
+  ollama:
+    model: "qwen2.5:7b"
+    context_length: 8192
+  temperature: 0.3
+  max_tokens: 4000
+
+visual:
+  enabled: false
+  backend: "local"
+  local:
+    model: "llava:7b"
+    frame_interval: 10
+    min_scene_change_threshold: 30
+
+rag:
+  embedding_model: "BAAI/bge-m3"
+  chroma_persist_dir: "~/.videosummary/chroma_db"
+
+budget:
+  currency: "CNY"
+  warn_threshold: 5.0
+
+extensions:
+  cherry_studio:
+    enabled: false
+    auto_sync: false
+  web_search:
+    enabled: false
+    provider: "tavily"
+    api_key: ""
