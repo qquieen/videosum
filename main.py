@@ -8,8 +8,6 @@ import argparse
 import logging
 from pathlib import Path
 
-import gradio as gr
-
 
 def setup_logging():
     """配置日志"""
@@ -44,13 +42,13 @@ def main():
     parser.add_argument(
         "--port",
         type=int,
-        default=7860,
-        help="Web服务器端口（默认: 7860）"
+        default=8080,
+        help="Web服务器端口（默认: 8080）"
     )
     parser.add_argument(
-        "--share",
+        "--web",
         action="store_true",
-        help="创建公共链接"
+        help="以Web模式运行"
     )
     
     args = parser.parse_args()
@@ -64,39 +62,40 @@ def main():
         print("请使用 --help 查看帮助")
         return
     
-    # Web界面模式
+    # Flet界面模式
     try:
-        from videosum.ui.app import create_app
+        import flet as ft
         
         print("🚀 启动 VideoSum...")
-        print(f"📍 访问地址: http://{args.host}:{args.port}")
         
-        app = create_app()
-        app.launch(
-            server_name=args.host,
-            server_port=args.port,
-            share=args.share,
-            inbrowser=True,
-            theme=gr.themes.Soft(),
-            css="""
-            .main-title {
-                text-align: center;
-                margin-bottom: 20px;
-            }
-            .start-btn {
-                height: 50px !important;
-                font-size: 18px !important;
-            }
-            """
-        )
+        if args.web:
+            # Web模式
+            print(f"📍 访问地址: http://{args.host}:{args.port}")
+            ft.app(
+                target=main,
+                view=ft.WEB_BROWSER,
+                port=args.port,
+                host=args.host,
+            )
+        else:
+            # 桌面模式
+            ft.app(target=main)
         
     except ImportError as e:
         print(f"❌ 缺少依赖: {e}")
-        print("请运行: pip install -r requirements.txt")
+        print("请运行: pip install flet")
         sys.exit(1)
     except Exception as e:
         print(f"❌ 启动失败: {e}")
         sys.exit(1)
+
+
+def main(page: ft.Page):
+    """Flet主函数"""
+    from videosum.ui.app import VideoSumApp
+    
+    app = VideoSumApp(page)
+    page.add(app.build())
 
 
 if __name__ == "__main__":
