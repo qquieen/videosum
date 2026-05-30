@@ -8,6 +8,8 @@ import argparse
 import logging
 from pathlib import Path
 
+import flet as ft
+
 
 def setup_logging():
     """配置日志"""
@@ -22,6 +24,14 @@ def setup_logging():
             logging.StreamHandler()
         ]
     )
+
+
+def flet_main(page: ft.Page):
+    """Flet主函数"""
+    from videosum.ui.app import VideoSumApp
+    
+    app = VideoSumApp(page)
+    page.add(app.build())
 
 
 def main():
@@ -63,39 +73,20 @@ def main():
         return
     
     # Flet界面模式
-    try:
-        import flet as ft
-        
-        print("🚀 启动 VideoSum...")
-        
-        if args.web:
-            # Web模式
-            print(f"📍 访问地址: http://{args.host}:{args.port}")
-            ft.app(
-                target=main,
-                view=ft.WEB_BROWSER,
-                port=args.port,
-                host=args.host,
-            )
-        else:
-            # 桌面模式
-            ft.app(target=main)
-        
-    except ImportError as e:
-        print(f"❌ 缺少依赖: {e}")
-        print("请运行: pip install flet")
-        sys.exit(1)
-    except Exception as e:
-        print(f"❌ 启动失败: {e}")
-        sys.exit(1)
-
-
-def main(page: ft.Page):
-    """Flet主函数"""
-    from videosum.ui.app import VideoSumApp
+    print("🚀 启动 VideoSum...")
     
-    app = VideoSumApp(page)
-    page.add(app.build())
+    if args.web:
+        # Web模式
+        print(f"📍 访问地址: http://{args.host}:{args.port}")
+        ft.app(
+            target=flet_main,
+            view=ft.AppView.WEB_BROWSER,
+            port=args.port,
+            host=args.host,
+        )
+    else:
+        # 桌面模式
+        ft.app(target=flet_main)
 
 
 if __name__ == "__main__":

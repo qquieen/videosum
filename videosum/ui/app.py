@@ -51,7 +51,7 @@ class VideoSumApp:
         header = ft.Container(
             content=ft.Column([
                 ft.Text("🎬 VideoSum", size=32, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER),
-                ft.Text("本地智能视频总结与课件生成工具", size=14, color=ft.colors.GREY_600, text_align=ft.TextAlign.CENTER),
+                ft.Text("本地智能视频总结与课件生成工具", size=14, color=ft.Colors.GREY_600, text_align=ft.TextAlign.CENTER),
             ]),
             padding=ft.padding.only(bottom=20),
         )
@@ -116,8 +116,8 @@ class VideoSumApp:
             width=350,
             height=50,
             style=ft.ButtonStyle(
-                bgcolor=ft.colors.BLUE_600,
-                color=ft.colors.WHITE,
+                bgcolor=ft.Colors.BLUE_600,
+                color=ft.Colors.WHITE,
             ),
         )
         
@@ -130,7 +130,7 @@ class VideoSumApp:
         self.status_text = ft.Text(
             "就绪",
             size=12,
-            color=ft.colors.GREY_600,
+            color=ft.Colors.GREY_600,
         )
         
         return ft.Container(
@@ -153,7 +153,7 @@ class VideoSumApp:
             ], spacing=15),
             padding=20,
             border_radius=10,
-            bgcolor=ft.colors.GREY_50,
+            bgcolor=ft.Colors.GREY_50,
         )
     
     def _build_output_panel(self) -> ft.Control:
@@ -162,7 +162,6 @@ class VideoSumApp:
         self.summary_output = ft.Markdown(
             "*暂无总结，请先处理视频*",
             selectable=True,
-            extension_set=ft.MarkdownExtensionSet.GITHUB_WEB,
         )
         
         self.qa_input = ft.TextField(
@@ -203,7 +202,7 @@ class VideoSumApp:
                             ft.Row([
                                 self.qa_input,
                                 ft.IconButton(
-                                    icon=ft.icons.SEND,
+                                    icon=ft.Icons.SEND,
                                     on_click=self._on_qa_submit,
                                     icon_size=30,
                                 ),
@@ -216,7 +215,7 @@ class VideoSumApp:
                 ft.Tab(
                     content=ft.Container(
                         content=ft.Column([
-                            ft.Text("📚 课件生成功能开发中...", color=ft.colors.GREY_500),
+                            ft.Text("📚 课件生成功能开发中...", color=ft.Colors.GREY_500),
                         ]),
                         padding=10,
                     ),
@@ -229,21 +228,21 @@ class VideoSumApp:
         return ft.Container(
             content=tabs,
             border_radius=10,
-            bgcolor=ft.colors.WHITE,
-            border=ft.border.all(1, ft.colors.GREY_300),
+            bgcolor=ft.Colors.WHITE,
+            border=ft.border.all(1, ft.Colors.GREY_300),
         )
     
     def _build_status_bar(self) -> ft.Control:
         """构建状态栏"""
         return ft.Container(
             content=ft.Row([
-                ft.Text("ASR: 本地Whisper | LLM: DeepSeek | 语言: 中文", size=11, color=ft.colors.GREY_600),
-                ft.Text("预估费用: ¥0.00", size=11, color=ft.colors.GREY_600),
+                ft.Text("ASR: 本地Whisper | LLM: DeepSeek | 语言: 中文", size=11, color=ft.Colors.GREY_600),
+                ft.Text("预估费用: ¥0.00", size=11, color=ft.Colors.GREY_600),
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             padding=ft.padding.only(top=10),
         )
     
-    def _on_file_picked(self, e: ft.FilePickerResultEvent):
+    def _on_file_picked(self, e):
         """文件选择回调"""
         if e.files:
             self.url_input.value = e.files[0].path
@@ -356,7 +355,7 @@ class VideoSumApp:
     def _add_chat_message(self, message: str, is_user: bool = True):
         """添加聊天消息"""
         avatar = "👤" if is_user else "🤖"
-        bg_color = ft.colors.BLUE_100 if is_user else ft.colors.GREY_100
+        bg_color = ft.Colors.BLUE_100 if is_user else ft.Colors.GREY_100
         
         chat_bubble = ft.Container(
             content=ft.Row([
@@ -386,14 +385,3 @@ class VideoSumApp:
         """导出总结"""
         self.status_text.value = "💾 导出功能开发中..."
         self.page.update()
-
-
-def main(page: ft.Page):
-    """Flet主函数"""
-    app = VideoSumApp(page)
-    page.add(app.build())
-
-
-def create_app():
-    """创建应用（兼容旧接口）"""
-    return main
