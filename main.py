@@ -8,6 +8,8 @@ import argparse
 import logging
 from pathlib import Path
 
+import gradio as gr
+
 
 def setup_logging():
     """配置日志"""
@@ -74,7 +76,18 @@ def main():
             server_name=args.host,
             server_port=args.port,
             share=args.share,
-            inbrowser=True
+            inbrowser=True,
+            theme=gr.themes.Soft(),
+            css="""
+            .main-title {
+                text-align: center;
+                margin-bottom: 20px;
+            }
+            .start-btn {
+                height: 50px !important;
+                font-size: 18px !important;
+            }
+            """
         )
         
     except ImportError as e:

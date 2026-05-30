@@ -10,6 +10,18 @@ from videosum.i18n import I18nManager
 
 logger = logging.getLogger(__name__)
 
+# 自定义CSS
+CUSTOM_CSS = """
+.main-title {
+    text-align: center;
+    margin-bottom: 20px;
+}
+.start-btn {
+    height: 50px !important;
+    font-size: 18px !important;
+}
+"""
+
 
 class VideoSumUI:
     """VideoSum Gradio界面"""
@@ -23,20 +35,7 @@ class VideoSumUI:
     def create_ui(self) -> gr.Blocks:
         """创建Gradio界面"""
         
-        with gr.Blocks(
-            title="VideoSum",
-            theme=gr.themes.Soft(),
-            css="""
-            .main-title {
-                text-align: center;
-                margin-bottom: 20px;
-            }
-            .start-btn {
-                height: 50px !important;
-                font-size: 18px !important;
-            }
-            """
-        ) as app:
+        with gr.Blocks(title="VideoSum") as app:
             # 标题
             gr.HTML("""
             <div class="main-title">
@@ -56,6 +55,9 @@ class VideoSumUI:
             
             # 底部状态栏
             self._create_status_bar()
+            
+            # 设置事件（必须在Blocks上下文中）
+            self._setup_events()
         
         return app
     
@@ -152,7 +154,7 @@ class VideoSumUI:
             self.cost_display = gr.Markdown("**预估费用**：¥0.00")
     
     def _setup_events(self):
-        """设置事件处理"""
+        """设置事件处理（必须在Blocks上下文中调用）"""
         
         # 文件上传时自动填入路径
         self.file_input.change(
@@ -258,17 +260,9 @@ class VideoSumUI:
         except Exception as e:
             chat_history.append((question, f"错误: {str(e)}"))
             return chat_history, ""
-    
-    def launch(self, **kwargs):
-        """启动应用"""
-        app = self.create_ui()
-        self._setup_events()
-        app.launch(**kwargs)
 
 
 def create_app() -> gr.Blocks:
     """创建应用实例"""
     ui = VideoSumUI()
-    app = ui.create_ui()
-    ui._setup_events()
-    return app
+    return ui.create_ui()
