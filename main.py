@@ -8,6 +8,12 @@ import argparse
 import logging
 from pathlib import Path
 
+# Windows UTF-8 支持
+if sys.platform == "win32":
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
 import gradio as gr
 
 
@@ -55,21 +61,18 @@ def main():
     
     args = parser.parse_args()
     
-    # 配置日志
     setup_logging()
     
     if args.no_ui:
-        # 命令行模式
         print("VideoSum 命令行模式")
         print("请使用 --help 查看帮助")
         return
     
-    # Web界面模式
     try:
         from videosum.ui.app import create_app
         
-        print("🚀 启动 VideoSum...")
-        print(f"📍 访问地址: http://{args.host}:{args.port}")
+        print("[INFO] 启动 VideoSum...")
+        print(f"[INFO] 访问地址: http://{args.host}:{args.port}")
         
         app = create_app()
         app.launch(
@@ -91,11 +94,11 @@ def main():
         )
         
     except ImportError as e:
-        print(f"❌ 缺少依赖: {e}")
+        print(f"[ERROR] 缺少依赖: {e}")
         print("请运行: pip install -r requirements.txt")
         sys.exit(1)
     except Exception as e:
-        print(f"❌ 启动失败: {e}")
+        print(f"[ERROR] 启动失败: {e}")
         sys.exit(1)
 
 
