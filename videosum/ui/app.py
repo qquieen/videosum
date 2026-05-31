@@ -50,7 +50,8 @@ class VideoSumApp:
                 ft.Text("🎬 VideoSum", size=28, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER),
                 ft.Text("本地智能视频总结工具", size=12, color=ft.Colors.GREY_600, text_align=ft.TextAlign.CENTER),
             ]),
-            padding=ft.padding.only(bottom=15),
+            padding=ft.padding.all(0),
+            margin=ft.margin.only(bottom=15),
         )
         
         left_panel = self._build_input_panel()
@@ -66,7 +67,8 @@ class VideoSumApp:
             content=ft.Row([
                 ft.Text("ASR: 本地Whisper | LLM: DeepSeek", size=10, color=ft.Colors.GREY_600),
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-            padding=ft.padding.only(top=10),
+            padding=ft.padding.all(0),
+            margin=ft.margin.only(top=10),
         )
         
         return ft.Column([header, main_content, status_bar], expand=True)
