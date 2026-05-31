@@ -8,8 +8,6 @@ import argparse
 import logging
 from pathlib import Path
 
-import flet as ft
-
 
 def setup_logging():
     """配置日志"""
@@ -26,14 +24,6 @@ def setup_logging():
     )
 
 
-def flet_main(page: ft.Page):
-    """Flet主函数"""
-    from videosum.ui.app import VideoSumApp
-    
-    app = VideoSumApp(page)
-    page.add(app.build())
-
-
 def main():
     """主入口"""
     parser = argparse.ArgumentParser(
@@ -47,18 +37,13 @@ def main():
     parser.add_argument(
         "--host",
         default="127.0.0.1",
-        help="Web服务器地址（默认: 127.0.0.1）"
+        help="服务器地址（默认: 127.0.0.1）"
     )
     parser.add_argument(
         "--port",
         type=int,
         default=8080,
-        help="Web服务器端口（默认: 8080）"
-    )
-    parser.add_argument(
-        "--web",
-        action="store_true",
-        help="以Web模式运行"
+        help="服务器端口（默认: 8080）"
     )
     
     args = parser.parse_args()
@@ -68,25 +53,24 @@ def main():
     
     if args.no_ui:
         # 命令行模式
-        print("VideoSum 命令行模式")
-        print("请使用 --help 查看帮助")
+        print("VideoSum 命令行模式已就绪。")
+        # TODO: 实现 CLI 处理逻辑
         return
     
-    # Flet界面模式
-    print("🚀 启动 VideoSum...")
+    # 启动 Gradio 界面
+    print("🚀 正在启动 VideoSum (Gradio 版)...")
+    from videosum.ui.app import VideoSumUI
     
-    if args.web:
-        # Web模式
-        print(f"📍 访问地址: http://{args.host}:{args.port}")
-        ft.app(
-            target=flet_main,
-            view=ft.AppView.WEB_BROWSER,
-            port=args.port,
-            host=args.host,
-        )
-    else:
-        # 桌面模式
-        ft.app(target=flet_main)
+    ui = VideoSumUI()
+    demo = ui.build()
+    
+    print(f"📍 访问地址: http://{args.host}:{args.port}")
+    demo.launch(
+        server_name=args.host,
+        server_port=args.port,
+        share=False,
+        inbrowser=True
+    )
 
 
 if __name__ == "__main__":

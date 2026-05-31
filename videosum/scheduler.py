@@ -2,6 +2,7 @@ import asyncio
 import uuid
 import time
 import logging
+import json
 from typing import Callable, Optional, Dict, Any
 from pathlib import Path
 
@@ -36,9 +37,45 @@ class Scheduler:
         self._input_handler = InputHandler(
             config_manager.get("app.temp_dir", "~/tmp/videosummary")
         )
+        self.cache_dir = Path(config_manager.get("app.temp_dir", "~/tmp/videosummary")).expanduser()
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self._load_all_tasks()
+
+    def _load_all_tasks(self):
+        """从磁盘加载所有缓存的任务"""
+        try:
+            for task_dir in self.cache_dir.iterdir():
+                if task_dir.is_dir():
+                    state_file = task_dir / "state.json"
+                    if state_file.exists():
+                        try:
+                            with open(state_file, 'r', encoding='utf-8') as f:
+                                data = json.load(f)
+                                task = ProcessingTask.from_dict(data)
+                                self.tasks[task.task_id] = task
+                        except Exception as e:
+                            logger.warning(f"加载任务失败 {task_dir.name}: {e}")
+        except Exception as e:
+            logger.error(f"加载任务目录失败: {e}")
+
+    def save_task(self, task_id: str):
+        """将任务持久化到磁盘"""
+        task = self.tasks.get(task_id)
+        if not task: return
+        
+        task_dir = self.cache_dir / task_id
+        task_dir.mkdir(parents=True, exist_ok=True)
+        state_file = task_dir / "state.json"
+        
+        try:
+            with open(state_file, 'w', encoding='utf-8') as f:
+                f.write(task.to_json())
+        except Exception as e:
+            logger.error(f"保存任务状态失败 {task_id}: {e}")
     
     def _get_asr_engine(self) -> ASREngine:
         """获取ASR引擎（懒加载）"""
+        # ... (保持原逻辑，但可以在此添加降级支持)
         if self._asr_engine is not None:
             return self._asr_engine
         
@@ -53,7 +90,7 @@ class Scheduler:
                 compute_type=local_config.get("compute_type", "float16")
             )
         else:
-            # 默认使用本地Whisper
+            # TODO: 实现 OpenAI/Aliyun ASR 适配器
             self._asr_engine = LocalWhisperASR()
         
         return self._asr_engine
@@ -127,7 +164,7 @@ class Scheduler:
         step: str,
         error: Optional[str] = None
     ):
-        """更新任务进度"""
+        """更新任务进度并持久化"""
         task = self.tasks.get(task_id)
         if task:
             task.status = status
@@ -137,7 +174,8 @@ class Scheduler:
                 task.error = error
             from datetime import datetime
             task.updated_at = datetime.now()
-    
+            self.save_task(task_id)
+
     async def process(
         self,
         task_id: str,
@@ -146,16 +184,7 @@ class Scheduler:
         progress_callback: Optional[Callable[[float, str], None]] = None
     ) -> ProcessingTask:
         """
-        处理视频/音频
-        
-        Args:
-            task_id: 任务ID
-            input_source: URL或本地文件路径
-            output_language: 输出语言
-            progress_callback: 进度回调
-        
-        Returns:
-            ProcessingTask: 处理结果
+        处理视频/音频 (支持断点续传)
         """
         task = self.tasks.get(task_id)
         if not task:
@@ -164,59 +193,60 @@ class Scheduler:
         task.output_language = output_language
         
         try:
-            # 1. 下载/加载
-            self.update_progress(task_id, ProcessingStatus.DOWNLOADING, 0.05, "正在加载...")
-            
-            def download_progress(p, msg):
-                self.update_progress(task_id, ProcessingStatus.DOWNLOADING, 0.05 + p * 0.15, msg)
-            
-            metadata, audio_path = self._input_handler.load(
-                input_source,
-                progress_callback=download_progress
-            )
-            task.video_metadata = metadata
-            
-            # 2. ASR转写
-            self.update_progress(task_id, ProcessingStatus.TRANSCRIBING, 0.20, "正在转写...")
-            
-            asr_engine = self._get_asr_engine()
-            
-            def transcribe_progress(p, msg):
-                self.update_progress(task_id, ProcessingStatus.TRANSCRIBING, 0.20 + p * 0.40, msg)
-            
-            transcription = await asyncio.to_thread(
-                asr_engine.transcribe,
-                str(audio_path),
-                transcribe_progress
-            )
-            task.transcription = transcription
-            
-            # 3. LLM总结
-            self.update_progress(task_id, ProcessingStatus.SUMMARIZING, 0.60, "正在总结...")
-            
-            llm_engine = self._get_llm_engine()
-            
-            summary = await self._summarize(
-                llm_engine,
-                transcription,
-                output_language,
-                lambda p, msg: self.update_progress(
-                    task_id, ProcessingStatus.SUMMARIZING, 0.60 + p * 0.35, msg
+            # 1. 下载/加载 (仅当尚未下载或元数据缺失时执行)
+            if not task.video_metadata or task.video_metadata.duration == 0:
+                self.update_progress(task_id, ProcessingStatus.DOWNLOADING, 0.05, "正在加载...")
+                def download_progress(p, msg):
+                    self.update_progress(task_id, ProcessingStatus.DOWNLOADING, 0.05 + p * 0.15, msg)
+                
+                metadata, audio_path = self._input_handler.load(
+                    input_source,
+                    progress_callback=download_progress
                 )
-            )
-            task.summary = summary
+                task.video_metadata = metadata
+            
+            # 2. ASR转写 (仅当尚未转写时执行)
+            if not task.transcription:
+                self.update_progress(task_id, ProcessingStatus.TRANSCRIBING, 0.20, "正在转写...")
+                asr_engine = self._get_asr_engine()
+                
+                def transcribe_progress(p, msg):
+                    self.update_progress(task_id, ProcessingStatus.TRANSCRIBING, 0.20 + p * 0.40, msg)
+                
+                audio_path = task.video_metadata.local_path
+                transcription = await asyncio.to_thread(
+                    asr_engine.transcribe,
+                    str(audio_path),
+                    transcribe_progress
+                )
+                task.transcription = transcription
+            
+            # 3. LLM总结 (仅当尚未生成总结或强制更新时执行)
+            if not task.summary:
+                self.update_progress(task_id, ProcessingStatus.SUMMARIZING, 0.60, "正在总结...")
+                llm_engine = self._get_llm_engine()
+                
+                summary = await self._summarize(
+                    llm_engine,
+                    task.transcription,
+                    output_language,
+                    lambda p, msg: self.update_progress(
+                        task_id, ProcessingStatus.SUMMARIZING, 0.60 + p * 0.35, msg
+                    )
+                )
+                task.summary = summary
             
             # 4. 计算费用
-            task.cost = self._estimate_cost(transcription, summary)
+            if not task.cost:
+                task.cost = self._estimate_cost(task.transcription, task.summary)
             
             # 5. 完成
             self.update_progress(task_id, ProcessingStatus.COMPLETED, 1.0, "处理完成")
-            
             return task
             
         except Exception as e:
             logger.error(f"处理失败: {str(e)}")
-            self.update_progress(task_id, ProcessingStatus.FAILED, 0.0, "处理失败", str(e))
+            self.update_progress(task_id, ProcessingStatus.FAILED, task.progress, "处理失败", str(e))
             raise
     
     async def _summarize(
@@ -226,14 +256,17 @@ class Scheduler:
         output_language: Language,
         progress_callback: Optional[Callable[[float, str], None]] = None
     ) -> SummaryResult:
-        """生成总结"""
+        """生成总结 (递归策略)"""
         start_time = time.time()
         
-        # 构建完整文本
-        full_text = "\n".join([s.text for s in transcription.segments])
-        total_tokens = llm_engine.count_tokens(full_text)
+        # 1. 准备初始文本
+        text_with_time = []
+        for seg in transcription.segments:
+            minutes = int(seg.start // 60)
+            seconds = int(seg.start % 60)
+            text_with_time.append(f"[{minutes:02d}:{seconds:02d}] {seg.text}")
         
-        # 语言指令
+        # 2. 语言指令
         lang_instructions = {
             Language.CHINESE: "请使用中文输出。",
             Language.ENGLISH: "Please output in English.",
@@ -241,173 +274,133 @@ class Scheduler:
         }
         lang_instruction = lang_instructions.get(output_language, "")
         
-        # 检查是否需要分块
-        context_length = llm_engine.context_length
+        # 3. 递归总结逻辑
+        context_limit = llm_engine.context_length - 1000
         
-        if total_tokens < context_length - 1000:
-            # 直接全文总结
+        async def recursive_summarize_step(texts: List[str], depth: int = 0) -> str:
+            combined_text = "\n\n".join(texts)
+            if llm_engine.count_tokens(combined_text) < context_limit:
+                if progress_callback:
+                    progress_callback(0.9, f"正在生成最终总结 (层级 {depth})...")
+                
+                messages = [
+                    {"role": "system", "content": f"你是一个专业的视频总结专家。请根据提供的视频片段摘要，生成一个结构化的、排版精美的Markdown总结。要求：1. {lang_instruction} 2. 包含核心观点、关键时刻、结论。3. 结构清晰。"},
+                    {"role": "user", "content": f"内容如下：\n\n{combined_text}"}
+                ]
+                return await asyncio.to_thread(llm_engine.generate, messages)
+
+            # 需要进一步分块
             if progress_callback:
-                progress_callback(0.5, "全文总结中...")
+                progress_callback(0.1 + depth * 0.2, f"文本较长，正在进行第 {depth + 1} 层递归总结...")
             
-            summary = await self._summarize_full(
-                llm_engine, transcription.segments, lang_instruction
-            )
-            chunks = []
-        else:
-            # 分块Map-Reduce
-            if progress_callback:
-                progress_callback(0.1, "文本较长，分块总结中...")
+            new_summaries = []
+            current_batch = []
+            current_tokens = 0
             
-            chunks, summary = await self._summarize_chunked(
-                llm_engine, transcription.segments, context_length,
-                lang_instruction,
-                lambda p, msg: progress_callback(0.1 + p * 0.8, msg) if progress_callback else None
-            )
+            for t in texts:
+                t_tokens = llm_engine.count_tokens(t)
+                if current_tokens + t_tokens > context_limit and current_batch:
+                    # 处理当前批次
+                    batch_text = "\n\n".join(current_batch)
+                    messages = [
+                        {"role": "system", "content": f"请为以下视频片段生成简明扼要的摘要。要求：1. {lang_instruction} 2. 保留关键时间点 [MM:SS]。3. 突出核心信息。"},
+                        {"role": "user", "content": batch_text}
+                    ]
+                    summary = await asyncio.to_thread(llm_engine.generate, messages)
+                    new_summaries.append(summary)
+                    current_batch = []
+                    current_tokens = 0
+                
+                current_batch.append(t)
+                current_tokens += t_tokens
+            
+            if current_batch:
+                batch_text = "\n\n".join(current_batch)
+                messages = [
+                    {"role": "system", "content": f"请为以下视频片段生成简明扼要的摘要。要求：1. {lang_instruction} 2. 保留关键时间点 [MM:SS]。3. 突出核心信息。"},
+                    {"role": "user", "content": batch_text}
+                ]
+                summary = await asyncio.to_thread(llm_engine.generate, messages)
+                new_summaries.append(summary)
+            
+            return await recursive_summarize_step(new_summaries, depth + 1)
+
+        # 执行递归
+        final_summary = await recursive_summarize_step(text_with_time)
         
-        # 提取关键点
-        key_points = await self._extract_key_points(llm_engine, summary, lang_instruction)
+        # 4. 提取关键点
+        key_points = await self._extract_key_points(llm_engine, final_summary, lang_instruction)
         
         processing_time = time.time() - start_time
-        
         return SummaryResult(
-            full_summary=summary,
-            chunks=chunks,
+            full_summary=final_summary,
+            chunks=[], # 递归模式下 chunk 定义已变，暂时留空或存储中间摘要
             key_points=key_points,
-            total_tokens=total_tokens,
+            total_tokens=llm_engine.count_tokens(final_summary),
             provider=llm_engine.provider,
             processing_time=processing_time,
             language=output_language
         )
     
-    async def _summarize_full(
+    async def qa(
         self,
-        llm_engine: LLMEngine,
-        segments: list,
-        lang_instruction: str
+        task_id: str,
+        question: str
     ) -> str:
-        """全文总结"""
-        # 构建带时间戳的文本
-        text_with_time = []
-        for seg in segments:
-            minutes = int(seg.start // 60)
-            seconds = int(seg.start % 60)
-            text_with_time.append(f"[{minutes:02d}:{seconds:02d}] {seg.text}")
+        """问答 (接入向量检索预留)"""
+        task = self.tasks.get(task_id)
+        if not task or not task.transcription:
+            raise SchedulerError("请先处理视频")
         
-        full_text = "\n".join(text_with_time)
+        llm_engine = self._get_llm_engine()
         
-        messages = [
-            {"role": "system", "content": f"""你是一个专业的视频内容总结助手。请根据以下转写文本生成结构化的总结。
-
-要求：
-1. {lang_instruction}
-2. 保留关键时间点 [MM:SS]
-3. 提取核心观点和要点
-4. 使用Markdown格式输出
-5. 结构清晰，分章节总结"""},
-            {"role": "user", "content": f"请总结以下视频内容：\n\n{full_text}"}
-        ]
+        # 1. 尝试使用 RAG 获取上下文 (TODO: 真正实现 VectorStore)
+        # 目前先采用简单的关键词匹配或头部采样作为保底
+        context_segments = self._get_context_via_rag(task, question)
         
-        return await asyncio.to_thread(
-            llm_engine.generate,
-            messages,
-            temperature=0.3
-        )
-    
-    async def _summarize_chunked(
-        self,
-        llm_engine: LLMEngine,
-        segments: list,
-        context_length: int,
-        lang_instruction: str,
-        progress_callback: Optional[Callable[[float, str], None]] = None
-    ) -> tuple:
-        """分块Map-Reduce总结"""
-        # 按时间窗口分割
-        chunk_size = context_length - 500
-        chunks = []
-        current_chunk = []
-        current_tokens = 0
-        
-        for seg in segments:
-            seg_tokens = llm_engine.count_tokens(seg.text)
-            if current_tokens + seg_tokens > chunk_size and current_chunk:
-                chunks.append(current_chunk)
-                current_chunk = []
-                current_tokens = 0
-            current_chunk.append(seg)
-            current_tokens += seg_tokens
-        
-        if current_chunk:
-            chunks.append(current_chunk)
-        
-        # 对每个块生成摘要
-        chunk_summaries = []
-        for i, chunk_segments in enumerate(chunks):
-            if progress_callback:
-                progress_callback(i / len(chunks), f"总结第 {i+1}/{len(chunks)} 块...")
-            
-            text_with_time = []
-            for seg in chunk_segments:
-                minutes = int(seg.start // 60)
-                seconds = int(seg.start % 60)
-                text_with_time.append(f"[{minutes:02d}:{seconds:02d}] {seg.text}")
-            
-            chunk_text = "\n".join(text_with_time)
-            
-            messages = [
-                {"role": "system", "content": f"""你是一个视频内容总结助手。请为以下片段生成带时间戳的摘要。
-
-要求：
-1. {lang_instruction}
-2. 格式：[时间] 摘要内容
-3. 保留关键时间点
-4. 提取核心观点"""},
-                {"role": "user", "content": f"请总结以下片段：\n\n{chunk_text}"}
-            ]
-            
-            chunk_summary = await asyncio.to_thread(
-                llm_engine.generate,
-                messages,
-                temperature=0.3
-            )
-            
-            chunk_summaries.append(SummaryChunk(
-                chunk_index=i,
-                time_start=chunk_segments[0].start,
-                time_end=chunk_segments[-1].end,
-                summary=chunk_summary,
-                token_count=llm_engine.count_tokens(chunk_summary)
-            ))
-        
-        # 合并所有块摘要，生成最终总结
-        if progress_callback:
-            progress_callback(0.9, "合并生成最终总结...")
-        
-        all_summaries = "\n\n".join([
-            f"## 片段 {c.chunk_index + 1} ({c.time_start:.0f}s - {c.time_end:.0f}s)\n{c.summary}"
-            for c in chunk_summaries
+        context = "\n".join([
+            f"[{s.start:.0f}s] {s.text}" for s in context_segments
         ])
         
+        # 2. 调用 LLM
+        lang_instruction = "请使用与问题相同的语言回答。"
         messages = [
-            {"role": "system", "content": f"""你是一个视频内容总结助手。以下是视频各个片段的摘要，请合并生成一个完整的结构化总结。
-
-要求：
-1. {lang_instruction}
-2. 保留关键时间点
-3. 去除重复内容
-4. 使用Markdown格式输出
-5. 结构清晰，分章节总结"""},
-            {"role": "user", "content": f"请合并以下片段摘要：\n\n{all_summaries}"}
+            {"role": "system", "content": f"""你是一个视频内容问答助手。请根据以下视频转写内容回答问题。要求：1. 严谨、准确，基于提供的视频内容。2. 如果视频中没提到，请直说。3. 引用具体的时间点。4. {lang_instruction}"""},
+            {"role": "user", "content": f"视频内容转写：\n{context}\n\n问题：{question}"}
         ]
         
-        final_summary = await asyncio.to_thread(
-            llm_engine.generate,
-            messages,
-            temperature=0.3
-        )
+        answer = await asyncio.to_thread(llm_engine.generate, messages)
         
-        return chunk_summaries, final_summary
-    
+        # 3. 记录历史
+        from videosum.models import QAExchange, Language
+        task.qa_history.append(QAExchange(
+            question=question,
+            answer=answer,
+            source_segments=context_segments,
+            timestamp=time.time(),
+            language=Language.CHINESE # 简便起见暂定
+        ))
+        self.save_task(task_id)
+        
+        return answer
+
+    def _get_context_via_rag(self, task: ProcessingTask, question: str, k: int = 10) -> list:
+        """简单的上下文获取逻辑 (向量搜索实现前的过渡)"""
+        # 暂时：如果文本量小，全量送入；如果文本量大，采样。
+        segments = task.transcription.segments
+        if len(segments) <= 20:
+            return segments
+        
+        # 简单的关键词匹配排序 (Dummy RAG)
+        keywords = question.split()
+        scored_segments = []
+        for seg in segments:
+            score = sum(1 for kw in keywords if kw.lower() in seg.text.lower())
+            scored_segments.append((score, seg))
+        
+        scored_segments.sort(key=lambda x: x[0], reverse=True)
+        return [s[1] for s in scored_segments[:k]]
+
     async def _extract_key_points(
         self,
         llm_engine: LLMEngine,
@@ -416,20 +409,11 @@ class Scheduler:
     ) -> list:
         """提取关键点"""
         messages = [
-            {"role": "system", "content": f"""请从以下总结中提取3-5个关键要点。
-
-要求：
-1. {lang_instruction}
-2. 每个要点一行，使用"-"开头
-3. 简洁明了"""},
-            {"role": "user", "content": f"请提取关键要点：\n\n{summary}"}
+            {"role": "system", "content": f"请从以下视频总结中提取3-5个最核心的关键要点。要求：1. {lang_instruction} 2. 每个要点一行，使用'-'开头。3. 简洁有力。"},
+            {"role": "user", "content": f"总结如下：\n\n{summary}"}
         ]
         
-        result = await asyncio.to_thread(
-            llm_engine.generate,
-            messages,
-            temperature=0.3
-        )
+        result = await asyncio.to_thread(llm_engine.generate, messages)
         
         # 解析关键点
         key_points = []
@@ -447,54 +431,14 @@ class Scheduler:
         transcription: TranscriptionResult,
         summary: SummaryResult
     ) -> CostEstimate:
-        """估算费用"""
-        # ASR费用（本地免费）
-        asr_cost = 0.0
-        
-        # LLM费用（简化计算）
-        llm_cost = 0.0
-        
+        """估算费用 (ASR+LLM)"""
+        # 暂时硬编码或从配置读取
+        from videosum.models import CostEstimate
         return CostEstimate(
-            asr_cost=asr_cost,
-            llm_cost=llm_cost,
-            total_cost=asr_cost + llm_cost,
+            asr_cost=0.0,
+            llm_cost=0.0,
+            total_cost=0.0,
             token_count=summary.total_tokens,
             duration_hours=transcription.duration / 3600,
             currency="CNY"
         )
-    
-    async def qa(
-        self,
-        task_id: str,
-        question: str
-    ) -> str:
-        """问答"""
-        task = self.tasks.get(task_id)
-        if not task or not task.transcription:
-            raise SchedulerError("请先处理视频")
-        
-        llm_engine = self._get_llm_engine()
-        
-        # 构建上下文
-        context_segments = task.transcription.segments[:20]  # 取前20个片段
-        context = "\n".join([
-            f"[{s.start:.0f}s] {s.text}" for s in context_segments
-        ])
-        
-        messages = [
-            {"role": "system", "content": f"""你是一个视频内容问答助手。请根据以下视频转写内容回答问题。
-
-要求：
-1. 基于视频内容回答
-2. 如果信息不足，请说明
-3. 引用相关时间点"""},
-            {"role": "user", "content": f"视频内容：\n{context}\n\n问题：{question}"}
-        ]
-        
-        answer = await asyncio.to_thread(
-            llm_engine.generate,
-            messages,
-            temperature=0.3
-        )
-        
-        return answer
