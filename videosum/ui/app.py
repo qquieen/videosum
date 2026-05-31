@@ -45,14 +45,7 @@ class VideoSumApp:
         self.page.padding = 20
     
     def build(self) -> ft.Control:
-        header = ft.Container(
-            content=ft.Column([
-                ft.Text("🎬 VideoSum", size=28, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER),
-                ft.Text("本地智能视频总结工具", size=12, color=ft.Colors.GREY_600, text_align=ft.TextAlign.CENTER),
-            ]),
-            padding=ft.padding.all(0),
-            margin=ft.margin.only(bottom=15),
-        )
+        header = ft.Text("🎬 VideoSum - 本地智能视频总结工具", size=24, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER)
         
         left_panel = self._build_input_panel()
         right_panel = self._build_output_panel()
@@ -63,13 +56,7 @@ class VideoSumApp:
             spacing=20,
         )
         
-        status_bar = ft.Container(
-            content=ft.Row([
-                ft.Text("ASR: 本地Whisper | LLM: DeepSeek", size=10, color=ft.Colors.GREY_600),
-            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-            padding=ft.padding.all(0),
-            margin=ft.margin.only(top=10),
-        )
+        status_bar = ft.Text("ASR: 本地Whisper | LLM: DeepSeek", size=10, color=ft.Colors.GREY_600)
         
         return ft.Column([header, main_content, status_bar], expand=True)
     
@@ -168,7 +155,6 @@ class VideoSumApp:
             content=tabs,
             border_radius=10,
             bgcolor=ft.Colors.WHITE,
-            border=ft.border.all(1, ft.Colors.GREY_300),
         )
     
     def _on_file_picked(self, e):
