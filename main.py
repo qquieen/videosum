@@ -8,7 +8,7 @@ import argparse
 import logging
 from pathlib import Path
 
-import flet as ft
+import gradio as gr
 
 
 def setup_logging():
@@ -26,14 +26,6 @@ def setup_logging():
     )
 
 
-def flet_main(page: ft.Page):
-    """Flet主函数"""
-    from videosum.ui.app import VideoSumApp
-    
-    app = VideoSumApp(page)
-    page.add(app.build())
-
-
 def main():
     """主入口"""
     parser = argparse.ArgumentParser(
@@ -42,45 +34,69 @@ def main():
     parser.add_argument(
         "--no-ui",
         action="store_true",
-        help="不启动界面（命令行模式）"
+        help="不启动Web界面（命令行模式）"
     )
     parser.add_argument(
         "--host",
         default="127.0.0.1",
-        help="服务器地址（默认: 127.0.0.1）"
+        help="Web服务器地址（默认: 127.0.0.1）"
     )
     parser.add_argument(
         "--port",
         type=int,
-        default=8080,
-        help="服务器端口（默认: 8080）"
+        default=7860,
+        help="Web服务器端口（默认: 7860）"
     )
     parser.add_argument(
-        "--web",
+        "--share",
         action="store_true",
-        help="以Web模式运行"
+        help="创建公共链接"
     )
     
     args = parser.parse_args()
     
+    # 配置日志
     setup_logging()
     
     if args.no_ui:
+        # 命令行模式
         print("VideoSum 命令行模式")
+        print("请使用 --help 查看帮助")
         return
     
-    print("🚀 启动 VideoSum...")
-    
-    if args.web:
+    # Web界面模式
+    try:
+        from videosum.ui.app import create_app
+        
+        print("🚀 启动 VideoSum...")
         print(f"📍 访问地址: http://{args.host}:{args.port}")
-        ft.app(
-            target=flet_main,
-            view=ft.AppView.WEB_BROWSER,
-            port=args.port,
-            host=args.host,
+        
+        app = create_app()
+        app.launch(
+            server_name=args.host,
+            server_port=args.port,
+            share=args.share,
+            inbrowser=True,
+            theme=gr.themes.Soft(),
+            css="""
+            .main-title {
+                text-align: center;
+                margin-bottom: 20px;
+            }
+            .start-btn {
+                height: 50px !important;
+                font-size: 18px !important;
+            }
+            """
         )
-    else:
-        ft.app(target=flet_main)
+        
+    except ImportError as e:
+        print(f"❌ 缺少依赖: {e}")
+        print("请运行: pip install -r requirements.txt")
+        sys.exit(1)
+    except Exception as e:
+        print(f"❌ 启动失败: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

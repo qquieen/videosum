@@ -7,7 +7,7 @@ openai>=1.0.0
 faster-whisper>=0.10.0
 
 # UI依赖
-flet>=0.25.0
+gradio>=4.0.0
 
 # 向量检索依赖
 langchain>=0.1.0
