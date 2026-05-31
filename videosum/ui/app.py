@@ -1,132 +1,252 @@
-"""VideoSum Gradio UI"""
+"""VideoSum Flet UI"""
 
-import gradio as gr
-import logging
+import flet as ft
 import asyncio
-import time
-from typing import Optional, Tuple
+import threading
+from typing import Optional
+import logging
 
 from videosum.config_manager import ConfigManager
 from videosum.scheduler import Scheduler
 from videosum.models import Language, ProcessingStatus
+from videosum.i18n import I18nManager
 
 logger = logging.getLogger(__name__)
 
-class VideoSumUI:
-    """VideoSum Gradio应用"""
+
+class VideoSumApp:
+    """VideoSum Flet应用"""
     
-    def __init__(self):
+    def __init__(self, page: ft.Page):
+        self.page = page
         self.config = ConfigManager()
         self.scheduler = Scheduler(self.config)
+        self.i18n = I18nManager(self.config.get("app.language", "zh"))
         self.current_task_id: Optional[str] = None
-
-    def _process_video(self, url: str, file_obj: Optional[str], language: str, progress=gr.Progress()):
-        """处理视频的包装器"""
-        input_source = url.strip() if url.strip() else file_obj
-        if not input_source:
-            return "❌ 请输入URL或选择文件", "", []
-
-        lang_map = {"中文": Language.CHINESE, "English": Language.ENGLISH, "Deutsch": Language.GERMAN}
-        output_lang = lang_map.get(language, Language.CHINESE)
-
-        # 创建任务
-        task_id = self.scheduler.create_task(input_source)
-        self.current_task_id = task_id
-
-        # 定义进度回调
-        def update_progress(p, msg):
-            progress(p, desc=msg)
-
-        # 运行异步处理
-        try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            task = loop.run_until_complete(
-                self.scheduler.process(task_id, input_source, output_lang, progress_callback=update_progress)
-            )
-            
-            if task.status == ProcessingStatus.COMPLETED:
-                return (
-                    f"✅ 处理完成！耗时: {task.summary.processing_time:.1f}s",
-                    task.summary.full_summary,
-                    task.summary.key_points
-                )
-            else:
-                return f"❌ 处理失败: {task.error}", "", []
-        except Exception as e:
-            logger.error(f"UI 处理异常: {e}")
-            return f"❌ 运行出错: {str(e)}", "", []
-
-    def _chat(self, message, history):
-        """问答交互"""
-        if not self.current_task_id:
-            return history + [[message, "请先处理视频后再提问。"]]
         
-        try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            answer = loop.run_until_complete(
-                self.scheduler.qa(self.current_task_id, message)
-            )
-            return history + [[message, answer]]
-        except Exception as e:
-            return history + [[message, f"❌ 问答出错: {str(e)}"]]
-
-    def build(self):
-        """构建 Gradio 界面"""
-        with gr.Blocks(theme=gr.themes.Soft(), title="VideoSum - 智能视频总结", css=".gradio-container {max-width: 1200px !important;}") as demo:
-            gr.Markdown("# 🎬 VideoSum")
-            gr.Markdown("### 本地智能视频总结与课件生成工具")
-            
-            with gr.Row():
-                # 左侧：配置与输入
-                with gr.Column(scale=1):
-                    with gr.Group():
-                        gr.Markdown("#### 📥 输入源")
-                        url_input = gr.Textbox(label="视频 URL", placeholder="支持 B站、YouTube 等")
-                        file_input = gr.File(label="或上传本地文件", file_types=["video", "audio"])
-                    
-                    with gr.Group():
-                        gr.Markdown("#### ⚙️ 配置")
-                        lang_select = gr.Dropdown(choices=["中文", "English", "Deutsch"], value="中文", label="总结语言")
-                        backend_info = gr.Markdown(f"*当前后端: {self.config.get('asr.backend', 'local')} / {self.config.get('llm.backend', 'deepseek')}*")
-                    
-                    btn_run = gr.Button("🚀 开始总结", variant="primary")
-                    status_output = gr.Textbox(label="状态", interactive=False)
-
-                # 右侧：输出结果
-                with gr.Column(scale=2):
-                    with gr.Tabs():
-                        with gr.TabItem("📝 总结结果"):
-                            summary_md = gr.Markdown("处理完成后此处将显示总结内容...")
-                            with gr.Row():
-                                btn_copy = gr.Button("📋 复制总结")
-                                btn_export = gr.Button("💾 导出 Markdown")
-                        
-                        with gr.TabItem("💬 问答助手"):
-                            chatbot = gr.Chatbot(label="与视频对话", height=500)
-                            msg_input = gr.Textbox(label="提问", placeholder="视频讲了什么？具体在哪个时间点？")
-                            btn_clear = gr.ClearButton([msg_input, chatbot])
-
-                        with gr.TabItem("📚 关键要点"):
-                            key_points = gr.JSON(label="核心知识点")
-
-            # 绑定事件
-            btn_run.click(
-                fn=self._process_video,
-                inputs=[url_input, file_input, lang_select],
-                outputs=[status_output, summary_md, key_points]
-            )
-            
-            msg_input.submit(self._chat, [msg_input, chatbot], [chatbot])
-            msg_input.submit(lambda: "", None, [msg_input]) # 清空输入框
-
-        return demo
-
-def launch():
-    ui = VideoSumUI()
-    demo = ui.build()
-    demo.launch(server_name="127.0.0.1", server_port=8080)
-
-if __name__ == "__main__":
-    launch()
+        # UI组件
+        self.url_input: Optional[ft.TextField] = None
+        self.file_picker: Optional[ft.FilePicker] = None
+        self.language_dropdown: Optional[ft.Dropdown] = None
+        self.start_button: Optional[ft.ElevatedButton] = None
+        self.progress_bar: Optional[ft.ProgressBar] = None
+        self.status_text: Optional[ft.Text] = None
+        self.summary_output: Optional[ft.Markdown] = None
+        self.qa_input: Optional[ft.TextField] = None
+        self.chat_list: Optional[ft.ListView] = None
+        
+        self._setup_page()
+    
+    def _setup_page(self):
+        self.page.title = "VideoSum"
+        self.page.theme_mode = ft.ThemeMode.LIGHT
+        self.page.window.width = 1200
+        self.page.window.height = 800
+        self.page.padding = 20
+    
+    def build(self) -> ft.Control:
+        header = ft.Container(
+            content=ft.Column([
+                ft.Text("🎬 VideoSum", size=28, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER),
+                ft.Text("本地智能视频总结工具", size=12, color=ft.Colors.GREY_600, text_align=ft.TextAlign.CENTER),
+            ]),
+            padding=ft.padding.only(bottom=15),
+        )
+        
+        left_panel = self._build_input_panel()
+        right_panel = self._build_output_panel()
+        
+        main_content = ft.Row(
+            [left_panel, right_panel],
+            expand=True,
+            spacing=20,
+        )
+        
+        status_bar = ft.Container(
+            content=ft.Row([
+                ft.Text("ASR: 本地Whisper | LLM: DeepSeek", size=10, color=ft.Colors.GREY_600),
+            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+            padding=ft.padding.only(top=10),
+        )
+        
+        return ft.Column([header, main_content, status_bar], expand=True)
+    
+    def _build_input_panel(self) -> ft.Control:
+        self.url_input = ft.TextField(
+            label="视频URL或本地文件路径",
+            hint_text="输入链接或点击下方选择文件",
+            multiline=True,
+            min_lines=2,
+            max_lines=3,
+            width=320,
+        )
+        
+        self.file_picker = ft.FilePicker(on_result=self._on_file_picked)
+        self.page.overlay.append(self.file_picker)
+        
+        self.language_dropdown = ft.Dropdown(
+            label="输出语言",
+            options=[ft.dropdown.Option("中文"), ft.dropdown.Option("English"), ft.dropdown.Option("Deutsch")],
+            value="中文",
+            width=320,
+        )
+        
+        self.start_button = ft.ElevatedButton(
+            text="🚀 开始总结",
+            on_click=self._on_start_click,
+            width=320,
+            height=45,
+            style=ft.ButtonStyle(bgcolor=ft.Colors.BLUE_600, color=ft.Colors.WHITE),
+        )
+        
+        self.progress_bar = ft.ProgressBar(width=320, value=0, visible=False)
+        self.status_text = ft.Text("就绪", size=11, color=ft.Colors.GREY_600)
+        
+        return ft.Container(
+            content=ft.Column([
+                ft.Text("📥 输入", size=14, weight=ft.FontWeight.BOLD),
+                self.url_input,
+                ft.ElevatedButton(
+                    "📁 选择本地文件",
+                    on_click=lambda _: self.file_picker.pick_files(
+                        allowed_extensions=["mp4", "mkv", "avi", "mov", "mp3", "wav", "m4a"],
+                    ),
+                    width=320,
+                ),
+                self.language_dropdown,
+                self.start_button,
+                self.progress_bar,
+                self.status_text,
+            ], spacing=12),
+            padding=15,
+            border_radius=10,
+            bgcolor=ft.Colors.GREY_50,
+        )
+    
+    def _build_output_panel(self) -> ft.Control:
+        self.summary_output = ft.Markdown("*暂无总结*", selectable=True)
+        
+        self.qa_input = ft.TextField(
+            label="输入问题",
+            hint_text="基于视频内容提问...",
+            expand=True,
+            on_submit=self._on_qa_submit,
+        )
+        
+        self.chat_list = ft.ListView(spacing=8, height=250, auto_scroll=True)
+        
+        tabs = ft.Tabs(
+            selected_index=0,
+            tabs=[
+                ft.Tab(
+                    content=ft.Container(
+                        content=ft.Column([self.summary_output]),
+                        padding=10,
+                    ),
+                    tab_content=ft.Text("📝 总结"),
+                ),
+                ft.Tab(
+                    content=ft.Container(
+                        content=ft.Column([
+                            self.chat_list,
+                            ft.Row([
+                                self.qa_input,
+                                ft.IconButton(icon=ft.Icons.SEND, on_click=self._on_qa_submit),
+                            ]),
+                        ]),
+                        padding=10,
+                    ),
+                    tab_content=ft.Text("💬 问答"),
+                ),
+            ],
+            expand=True,
+        )
+        
+        return ft.Container(
+            content=tabs,
+            border_radius=10,
+            bgcolor=ft.Colors.WHITE,
+            border=ft.border.all(1, ft.Colors.GREY_300),
+        )
+    
+    def _on_file_picked(self, e):
+        if e.files:
+            self.url_input.value = e.files[0].path
+            self.page.update()
+    
+    def _on_start_click(self, e):
+        url = self.url_input.value.strip() if self.url_input.value else ""
+        if not url:
+            self.status_text.value = "❌ 请输入URL或选择文件"
+            self.page.update()
+            return
+        
+        self.progress_bar.visible = True
+        self.progress_bar.value = 0
+        self.status_text.value = "⏳ 处理中..."
+        self.start_button.disabled = True
+        self.page.update()
+        
+        lang_map = {"中文": Language.CHINESE, "English": Language.ENGLISH, "Deutsch": Language.GERMAN}
+        output_lang = lang_map.get(self.language_dropdown.value, Language.CHINESE)
+        
+        task_id = self.scheduler.create_task(url)
+        self.current_task_id = task_id
+        
+        def process_task():
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                task = loop.run_until_complete(self.scheduler.process(task_id, url, output_lang))
+                self.page.run_task(self._on_process_complete, task)
+            except Exception as ex:
+                self.page.run_task(self._on_process_error, str(ex))
+        
+        threading.Thread(target=process_task, daemon=True).start()
+    
+    async def _on_process_complete(self, task):
+        self.progress_bar.value = 1.0
+        self.start_button.disabled = False
+        if task.status == ProcessingStatus.COMPLETED:
+            self.status_text.value = f"✅ 完成 - {task.summary.processing_time:.1f}s"
+            self.summary_output.value = task.summary.full_summary
+        else:
+            self.status_text.value = f"❌ 失败: {task.error}"
+        self.page.update()
+    
+    async def _on_process_error(self, msg):
+        self.progress_bar.visible = False
+        self.start_button.disabled = False
+        self.status_text.value = f"❌ {msg}"
+        self.page.update()
+    
+    def _on_qa_submit(self, e):
+        question = self.qa_input.value.strip() if self.qa_input.value else ""
+        if not question or not self.current_task_id:
+            return
+        
+        self._add_chat(question, True)
+        self.qa_input.value = ""
+        self.page.update()
+        
+        def get_answer():
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                answer = loop.run_until_complete(self.scheduler.qa(self.current_task_id, question))
+                self.page.run_task(self._add_chat, answer, False)
+            except Exception as ex:
+                self.page.run_task(self._add_chat, f"错误: {ex}", False)
+        
+        threading.Thread(target=get_answer, daemon=True).start()
+    
+    def _add_chat(self, message: str, is_user: bool):
+        bg = ft.Colors.BLUE_100 if is_user else ft.Colors.GREY_100
+        bubble = ft.Container(
+            content=ft.Text(message, size=12, selectable=True),
+            padding=8,
+            border_radius=8,
+            bgcolor=bg,
+        )
+        self.chat_list.controls.append(bubble)
+        self.page.update()
